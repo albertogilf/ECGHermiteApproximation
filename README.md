@@ -30,4 +30,21 @@ The heartbeat type is not used in the hermite approximation, and the approximate
 * This work was the final project of the Bachellor's degree in Computer Science of Alberto Gil de la fuente, in the university CEU-San Pablo, and supervised by [Gabriel Caffarena](https://twitter.com/gacaffe?lang=es). The project memory is available in the library of the university. 
 * The source code in Java was developed by [David Gonzalez Marquez](https://github.com/DavidGMarquez). 
 
+## Reference
+Please cite this publication when referencing or using this material:
+```
+@article{Gil2016,
+title = "GPU-Based Acceleration of ECG Characterization Using High-Order Hermite Polynomials",
+journal = "Current Bioinformatics",
+volume = "11",
+number = "4",
+pages = "430 - 439",
+year = "2016",
+issn = "0031-3203",
+doi = "10.2174/1574893611666160212235711",
+url = "https://www.ingentaconnect.com/contentone/ben/cbio/2016/00000011/00000004/art00007",
+author = "Gil, Alberto; G. Márquez, David; Caffarena, Gabriel; Iriarte, Ana; Otero, Abraham"
+}
+```
+
 [CUDA ECG article](https://github.com/albertogilf/ECGHermiteApproximation/blob/master/gil2016.pdf)
