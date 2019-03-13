@@ -1,0 +1,179 @@
+/*
+ * Kernelprueba.cu
+ *
+ *  Created on: May 12, 2013
+ *      Author: Alberto Gil
+ *
+ *
+ */
+//#ifndef _KERNEL_H_
+//#define _KERNEL_H_
+
+#define frequency 360
+#define Cmuestras 144
+#define ordenpolinomial 6
+#define sigmasnum 47
+//#include "hermite.h"
+#include "Kernelprueba.cuh"
+#include <math.h>
+
+////////////////////////////////////////////////////////////////////////////////		
+//	blockDim.x3 grid(NUM_BLQ, NUM_BLQ,1);
+//	blockDim.x3 threads_BLQ(TAM_BLQ,1,1);
+//
+//	HermiteKernel<<grid,threads_BLQ>>(weightsHermitePoly, aproximateBeat);
+////////////////////////////////////////////////////////////////////////////////
+// TENGO QUE CALCULAR EL ERROR EN SECUENCIAL PARA CADA DIFERENTE SIGMA
+
+__shared__ int s_originalBeatInformationGPU[Cmuestras];
+__shared__ float s_hermiteAproximation[Cmuestras];
+__shared__ float s_currentError[Cmuestras];
+__shared__ double s_weightsBest[ordenpolinomial];
+__shared__ float s_weights[ordenpolinomial];
+
+__device__ int factorialGPU(int a)
+    {
+        int resultado=1;
+        while (a > 0)
+        {
+            resultado = resultado * a;
+            a--;
+        }
+        return resultado;
+    }
+
+
+__device__ float HRGPU(int n, float x) {
+        float resultado=0;
+        if (n == 0) {
+            resultado=1.00;
+        } else if (n == 1) {
+            resultado=2 * x;
+        } else if (n == 2) {
+            resultado=4 * (float) pow(x, 2) - 2;
+        } else if (n == 3) {
+            resultado=8 * (float) pow(x, 3) - 12 * x;
+        } else if (n == 4) {
+            resultado=16 * (float) pow(x, 4) - 48 * (float) pow(x, 2) + 12;
+        } else if (n == 5) {
+            resultado=32 * (float) pow(x, 5) - 160 * (float) pow(x, 3) + 120 * x;
+        } else if (n == 6) {
+            resultado=64 * (float) pow(x, 6) - 480 * (float) pow(x, 4) + 720 * (float) pow(x, 2) - 120;
+        } else if (n == 7) {
+            resultado=128 * (float) pow(x, 7) - 1344 * (float) pow(x, 5) + 3360 * (float) pow(x, 3) - 1680 * x;
+        } else if (n == 8) {
+            resultado=256 * (float) pow(x, 8) - 3584 * (float) pow(x, 6) + 13440 * (float) pow(x, 4) - 13440 * (float) pow(x, 2) + 1680;
+        } else if (n == 9) {
+            resultado=512 * (float) pow(x, 9) - 9216 * (float) pow(x, 7) + 48384 * (float) pow(x, 5) - 80640 * (float) pow(x, 3) + 30240 * x;
+        } else {
+            resultado=0;
+        }
+        return resultado;
+    }
+
+__global__ void HermiteKernel(int *originalBeatGPU,float *weightsBestGPU,float *fisGPU, float *sigmaBestGPU,float sigmaInit, int numerosigmas)
+    {
+      int currentSigma=0;
+      int j=0;
+      int i=0;
+      float errorminimo=100000000000.0;
+      float sigmaBest;
+      int idx = gridDim.x * blockDim.x * blockIdx.y + blockDim.x*blockIdx.x + threadIdx.x;
+      s_originalBeatInformationGPU[threadIdx.x]=originalBeatGPU[idx];
+      float valueHermiteAproximation=0;
+      float weight=0.0;
+      for (currentSigma = 0; currentSigma < numerosigmas; currentSigma++)
+      {
+
+               if(threadIdx.x==0)
+               {
+		 for(i=0;i<ordenpolinomial;i++)
+		 {
+                  weight=0.0;
+	          for (j = 0; j < blockDim.x ; j++)
+        	  {
+	              weight+=s_originalBeatInformationGPU[j] * fisGPU[currentSigma*blockDim.x*ordenpolinomial+blockDim.x*i+j];
+		  }
+		  s_weights[i]=weight;
+		 }
+ 	       }
+              __syncthreads();
+
+
+	valueHermiteAproximation=0;
+	for (j = 0; j < ordenpolinomial ; j++)
+        {
+            valueHermiteAproximation += s_weights[j] * fisGPU[currentSigma*blockDim.x*ordenpolinomial+(j*blockDim.x)+threadIdx.x];
+        }
+
+        s_hermiteAproximation[threadIdx.x]=valueHermiteAproximation;
+
+        s_currentError[threadIdx.x] = pow((s_originalBeatInformationGPU[threadIdx.x] - s_hermiteAproximation[threadIdx.x]), 2);
+	__syncthreads();
+
+        for(unsigned int stride=128;stride>0;stride/=2)
+	{
+           __syncthreads();
+	   if((threadIdx.x<stride) && ((threadIdx.x+stride)<blockDim.x))
+	   {
+	       s_currentError[threadIdx.x]+=s_currentError[threadIdx.x+stride];
+	   }
+	}
+        __syncthreads();
+
+	if(threadIdx.x==0)
+	{
+	    if(s_currentError[threadIdx.x]<errorminimo)
+
+	    {
+	        sigmaBest=currentSigma;
+	        errorminimo=s_currentError[threadIdx.x];
+
+		s_weightsBest[0]=s_weights[0];
+		s_weightsBest[1]=s_weights[1];
+		s_weightsBest[2]=s_weights[2];
+		s_weightsBest[3]=s_weights[3];
+		s_weightsBest[4]=s_weights[4];
+		s_weightsBest[5]=s_weights[5];
+
+	    }
+// segun el bucle de sigma y segun el numero de bloque hay que modificar indice de sigmaerror
+	}
+
+      } // Final bucle sigma
+
+
+      if(threadIdx.x<6)
+      {
+	if(threadIdx.x==0)
+        {
+          sigmaBestGPU[gridDim.x * blockIdx.y + blockIdx.x]=sigmaBest*sigmaInit+sigmaInit;
+
+	}
+	  weightsBestGPU[(gridDim.x * blockIdx.y)*ordenpolinomial + blockIdx.x*ordenpolinomial + threadIdx.x]=s_weightsBest[threadIdx.x];
+      }
+
+
+    } // final kernel
+
+
+
+
+__global__ void FiKernel(float *fisGPU,float sigmaInit, float sigmaFinal)
+    {
+      float currentSigma=sigmaInit*blockIdx.x+sigmaInit; // SIGMA ACTUAL PARA CADA BLOQUE
+      int indicesigma=blockIdx.x*Cmuestras*gridDim.y;  
+
+      int j=threadIdx.x - Cmuestras / 2;
+      int h=blockIdx.y*Cmuestras; // indice orden polinomial
+
+      double resultado= (pow(float(E), -(pow(float(j), float(2)) / (2 * pow(currentSigma, float(2))))) * HRGPU(int(blockIdx.y), (j / currentSigma)))/sqrt(currentSigma * pow(float(2), int(blockIdx.y)) * factorialGPU(int(blockIdx.y)) * sqrt(PI));
+
+
+      fisGPU[indicesigma+h+threadIdx.x]=resultado;
+
+
+    } // final kernel
+
+
+
