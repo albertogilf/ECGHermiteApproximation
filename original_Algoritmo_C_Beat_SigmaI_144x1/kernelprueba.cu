@@ -148,7 +148,7 @@ __global__ void phiKernel(float *phisGPU,float initSigma)
   float currentSigma = initSigma*blockIdx.x+initSigma; // Current sigma per block
   int sigmaIndex = blockIdx.x*NUMSAMPLESHEARTBEAT*gridDim.y;  
   int j = threadIdx.x - NUMSAMPLESHEARTBEAT / 2;
-  int h = blockIdx.y*NUMSAMPLESHEARTBEAT; // indice orden polinomial
+  int h = blockIdx.y*NUMSAMPLESHEARTBEAT; // polynomyal order index
   double result = (pow(float(E), -(pow(float(j), float(2)) / (2 * pow(currentSigma, float(2))))) * HRGPU(int(blockIdx.y), 
     (j / currentSigma)))/sqrt(currentSigma * pow(float(2), int(blockIdx.y)) * factorialGPU(int(blockIdx.y)) * sqrt(PI));
   phisGPU[sigmaIndex+h+threadIdx.x]=result;
